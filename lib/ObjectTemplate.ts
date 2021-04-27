@@ -7,13 +7,21 @@
  */
 // handle CommonJS/Node.js or browser
 
-const sysmo           = (typeof require === 'function' ? require('sysmo') : undefined) || (typeof window !== 'undefined' && window !== null ? window.Sysmo : undefined);
-const TemplateConfig  = (typeof require === 'function' ? require('./TemplateConfig') : undefined) || (typeof window !== 'undefined' && window !== null ? window.json2json.TemplateConfig : undefined);
+import { TemplateConfig } from './TemplateConfig';
+import { getDeepValue } from './utilts';
 
 // class definition
 
-class ObjectTemplate {
-  constructor(config, parent) {
+export class ObjectTemplate {
+  public config;
+
+  public parent;
+
+  private pathNodes;
+
+  private pathCache;
+
+  constructor(config, parent?) {
     this.transform = this.transform.bind(this);
     this.processArray = this.processArray.bind(this);
     this.processMap = this.processMap.bind(this);
@@ -37,9 +45,9 @@ class ObjectTemplate {
     if (node == null) { return null; }
 
     // process properties
-    switch (sysmo.type(node)) {
-      case 'Array':  return this.processArray(node);
-      case 'Object': return this.processMap(node);
+    switch (true) {
+      case Array.isArray(node):  return this.processArray(node);
+      case typeof node === 'object': return this.processMap(node);
       default: return null; //node
     }
   }
@@ -80,9 +88,9 @@ class ObjectTemplate {
   }
 
   processMap(node) {
-
     // convert hash to array if config.mapToArray is true
     let context, nested_key;
+
     if (this.config.mapToArray) {
       context = [];
 
@@ -109,7 +117,6 @@ class ObjectTemplate {
   }
 
   createMapStructure(node) {
-
     const context = {};
 
     if (!this.config.nestTemplate) { return this.chooseValue(node, context); }
@@ -137,8 +144,7 @@ class ObjectTemplate {
     }
   }
 
-  chooseValue(node, context) {
-    if (context == null) { context = {}; }
+  chooseValue(node, context = {}) {
     const result = this.config.getValue(node);
 
     switch (result.name) {
@@ -150,22 +156,36 @@ class ObjectTemplate {
   }
 
   processTemplate(node, context, template) {
-
     // loop through properties in template
     if (template == null) { template = {}; }
     for (var key in template) {
       // process mapping instructions
       var filter;
       let value = template[key];
-      switch (sysmo.type(value)) {
+
+      switch (true) {
         // string should be the path to a property on the current node
-        case 'String':   filter = (node, path)   => this.getNode(node, path); break;
+        case typeof value === 'string': {
+          filter = (node, path) => this.getNode(node, path);
+          break;
+        };
         // array gets multiple property values
-        case 'Array':    filter = (node, paths)  => Array.from(paths).map((path) => this.getNode(node, path)); break;
+        case Array.isArray(value): {
+          filter = (node, paths)  => Array.from(paths).map((path) => this.getNode(node, path));
+          break;
+        }
         // function is a custom filter for the node
-        case 'Function': filter = (node, value)  => value.call(this, node, key); break;
-        case 'Object':   filter = (node, config) => new this.constructor(config, this).transform(node); break;
-        default:                  filter = (node, value) => value;
+        case typeof value === 'function': {
+          filter = (node, value)  => value.call(this, node, key);
+          break;
+        }
+        case typeof value === 'object': {
+          filter = (node, config) => new ObjectTemplate(config, this).transform(node);
+          break;
+        }
+        default: {
+          filter = (node, value) => value;
+        }
       }
 
       value = filter(node, value);
@@ -191,7 +211,7 @@ class ObjectTemplate {
   updateContext(context, node, value, key) {
     // format key and value
     const formatted = this.config.applyFormatting(node, value, key);
-    if (sysmo.isArray(formatted)) {
+    if (Array.isArray(formatted)) {
       return Array.from(formatted).map((item) => this.aggregateValue(context, item.key, item.value));
     } else if (formatted != null) {
       return this.aggregateValue(context, formatted.key, formatted.value);
@@ -202,8 +222,8 @@ class ObjectTemplate {
     if ((value == null) && !!this.config.ignoreEmpty) { return context; }
 
     // if context is an array, just add the value
-    if (sysmo.isArray(context)) {
-      if (this.config.config.flatArray && sysmo.isArray(value)) {
+    if (Array.isArray(context)) {
+      if (this.config.config.flatArray && Array.isArray(value)) {
         context.push.apply(context, value);
       } else {
         context.push(value);
@@ -218,7 +238,7 @@ class ObjectTemplate {
 
     if ((existing == null)) {
       context[key] = value;
-    } else if (!sysmo.isArray(existing)) {
+    } else if (!Array.isArray(existing)) {
       context[key] = [existing, value];
     } else {
       context[key].push(value);
@@ -235,7 +255,7 @@ class ObjectTemplate {
     if (!path) { return null; }
     if (path === '.') { return node; }
     this.paths(node, path);
-    return sysmo.getDeepValue(node, path, true);
+    return getDeepValue(node, path, true);
   }
 
   pathAccessed(node, path) {
@@ -243,8 +263,13 @@ class ObjectTemplate {
     return this.paths(node).indexOf(key) !== -1;
   }
 
-  // track the first property in a path for each node through object tree
-  paths(node, path) {
+  /**
+   * Track the first property in a path for each node through object tree.
+   * @param node 
+   * @param path 
+   * @returns 
+   */
+  paths(node, path?) {
     let paths;
     if (path) { path = path.split('.')[0]; }
 
@@ -267,5 +292,3 @@ class ObjectTemplate {
     return paths;
   }
 }
-
-module.exports = ObjectTemplate;

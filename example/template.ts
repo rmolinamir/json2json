@@ -1,10 +1,13 @@
-const { ObjectTemplate } = require('json-dst')
+import { ObjectTemplate } from '../lib';
+import data from './original.json';
+
+console.log('data: ', data);
 
 const tmpl = { 
   path: '.',
   aggregate: { 
-    total(key, value, existing) { if (!isArray(value)) { return value; } else { return value.sort().reverse()[0]; } },
-    pages(key, value, existing) { if (!isArray(value)) { return value; } else { return value.sort().reverse()[0]; } }
+    total(key, value, existing) { if (!Array.isArray(value)) { return value; } else { return value.sort().reverse()[0]; } },
+    pages(key, value, existing) { if (!Array.isArray(value)) { return value; } else { return value.sort().reverse()[0]; } }
   },
   as: {
     bins: { 
@@ -66,4 +69,6 @@ const tmpl = {
   }
 };
 
-new ObjectTemplate(tmpl).transform(data);
+const transformed = new ObjectTemplate(tmpl).transform(data);
+
+console.log('transformed: ', transformed);

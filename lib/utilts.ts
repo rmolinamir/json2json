@@ -1,65 +1,61 @@
-// TODO: Rewrite sysmo.js' getDeepValue function
+/**
+ * Get the value of a property deeply nested in an object hierarchy.
+ * @param {target<unknown> | ArrayLike<unknown>} target 
+ * @param {string} path 
+ * @param {boolean} traverseArrays 
+ * @returns {Array<unknown> | undefined}
+ */
+export function getDeepValue(target, path, traverseArrays = true) {
+  // If traversing arrays is enabled and the target is target,
+  // the target will be converted to an Array.
+  if (Symbol.iterator in Object(target)) {
+    target = Array.from(target);
 
-//get the value of a property deeply nested in an object hierarchy
-function getDeepValue(target, path, traverseArrays) {
-      
-  // if traversing arrays is enabled and this is an array, loop
-  // may be a "array-like" node list (or simi0lar), in which case it needs to be converted
-  if (traverseArrays && Sysmo.isArrayLike(target)) {
-    
-    target = Sysmo.makeArray(target);
-    
-    var children = [];
-    
+    const children = [];
+
     for (var i = 0; i < target.length; i++) {
-      // recursively loop through children
-      var child = Sysmo.getDeepValue(target[i], path, traverseArrays);
+      // Recursively loop through children.
+      const child = getDeepValue(target[i], path, traverseArrays);
       
-      // ignore if undefined
-      if (typeof child != "undefined") {
-        //flatten array because the original path points to one flat result set
-        if (Sysmo.isArray(child)) {
-          
-          for (var j = 0; j < child.length; j++) {
-            children.push(child[j]);
-          }
-          
+      // Ignore if undefined
+      if (typeof child != 'undefined') {
+        // Flatten array because the original path points to one
+        // flat result set.
+        if (Array.isArray(child)) {
+          children.push(...child);
         } else {
-          
           children.push(child);
-          
         }
       }
     }
-    
-    return (children.length) ? children : void(0);
+
+    return (children.length) ? children : undefined;
   }
-  
-  var invoke_regex = /\(\)$/,
-      properties = path.split('.'),
-      property;
+
+  const invokeRegex = /\(\)$/;
+  const properties = path.split('.');
 
   if (target != null && properties.length) {
-    
-    var propertyName = properties.shift(),
-        invoke = invoke_regex.test(propertyName)
-    
+
+    let propertyName = properties.shift();
+    const invoke = invokeRegex.test(propertyName);
+
     if (invoke) {
-      propertyName = propertyName.replace(invoke_regex, "");
+      propertyName = propertyName.replace(invokeRegex, "");
     }
-    
+
     if (invoke && propertyName in target) {
       target = target[propertyName]();
     } else {
       target = target[propertyName];
     }
-    
+
     path = properties.join('.');
-    
+
     if (path) {
-      target = Sysmo.getDeepValue(target, path, traverseArrays);
+      target = getDeepValue(target, path, traverseArrays);
     }
   }
-  
+
   return target;
 }
